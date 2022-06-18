@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <title>思维导图列表</title>
+    <link rel="shortcut icon" href="/static/favicon.ico"/>
+    <link rel="stylesheet" href="/static/layui-v2.6.8/layui/css/layui.css" media="all">
+    <script src="/static/layui-v2.6.8/layui/layui.js"></script>
+    <script src="/static/js/jquery-1.11.3.min.js"></script>
+    <script>
+        let layer  //弹层
+            , laypage  //分页
+            , laydate  //日期
+            , table  //表格
+            , carousel  //轮播
+            , upload  //上传
+            , element  //元素操作
+            , slider  //滑块
+            , dropdown  //下拉菜单
+        //加载模块
+        layui.use(function () { //亦可加载特定模块：layui.use(['layer', 'laydate', function(){
+            //得到各种内置组件
+            layer = layui.layer //弹层
+                , laypage = layui.laypage //分页
+                , laydate = layui.laydate //日期
+                , table = layui.table //表格
+                , carousel = layui.carousel //轮播
+                , upload = layui.upload //上传
+                , element = layui.element //元素操作
+                , slider = layui.slider //滑块
+                , dropdown = layui.dropdown //下拉菜单
+        });
+
+        // 定义function
+        const listView = function (options) {
+            // 当前页
+            this.current_page = 1
+            // 每页条数
+            this.limit = 10
+            // 总条数
+            this.count = 0
+
+            // 参数
+            this.options = options
+            this.opts = {"h": 'oo'}
+        }
+
+        listView.prototype = {
+            init: function () {
+                this.merge_obj(this.opts, this.options)
+            },
+            // 获取数据
+            fetch_data: function () {
+                const me = this
+                const get_param = {'page': this.current_page, 'page_size': this.limit}
+                if (this.get_search_coop_mind_name()) {
+                    get_param.coop_mind_name = this.get_search_coop_mind_name()
+                }
+                $.get('list', get_param, function (resp) {
+                    // 清空数据
+                    $('#layui-table tbody').empty()
+                    $('#' + me.opts.page_bar_elem).empty()
+
+                    const results = resp.results
+                    results.forEach(item => {
+                        const tr = `<tr>
+                                    <td>${item.coop_mind_name}</td>
+                                    <td>${item.creator}</td>
+                                    <td>${item.create_time}</td>
+                                    <td>${item.update_time}</td>
+                                    <td>
+                                      <i class="layui-icon layui-icon-edit" style="font-size: 15px; color: #1E9FFF;cursor: pointer;" onclick="window.open('detail?id=${item.id}')">编辑</i>
+                                      <i class="layui-icon layui-icon-share" style="font-size: 15px; color: #1E9FFF;cursor: pointer;margin-left: 10px;" onclick="copy_url(${item.id})">复制分享</i>
+                                      <i class="layui-icon layui-icon-delete" style="font-size: 15px; color: #1E9FFF;cursor: pointer;margin-left: 10px;" onclick="delmind(${item.id})">删除</i>
+                                    </td>
+                                    </tr>`
+                        $('#layui-table tbody').append(tr)
+                    })
+
+                    // 分页组件
+                    me.count = resp.count
+                    me.auto_page_bar()
+                })
+            },
+            get_search_coop_mind_name: function () {
+                return $('#mind_name').val()
+            },
+            // 显示分页组件
+            auto_page_bar: function () {
+                const me = this
+                //执行一个laypage实例
+                laypage.render({
+                    elem: me.opts.page_bar_elem  //注意，这里的 test1 是 ID，不用加 # 号
+                    , curr: me.current_page
+                    , count: me.count            //数据总数，从服务端得到
+                    , limit: me.limit            // 每页显示的条数。
+                    , layout: ['count', 'prev', 'page', 'next', 'limit']
+                    , jump: function (obj, first) {
+                        //obj包含了当前分页的所有参数，比如：
+                        me.current_page = obj.curr
+                        me.limit = obj.limit
+                        if (!first) {
+                            me.fetch_data()
+                        }
+                    }
+                });
+            },
+            // 合并属性
+            merge_obj: function (target, src) {
+                for (let o in src) {
+                    if (o in target) {
+                        if (typeof target[o] === 'object' && Object.prototype.toString.call(target[o]).toLowerCase() === '[object object]' && !target[o].length) {
+                            this.merge(target[o], src[o]);
+                        } else {
+                            target[o] = src[o];
+                        }
+                    } else {
+                        target[o] = src[o];
+                    }
+                }
+                return target;
+            },
+            json2string: function (json) {
+                if (!!JSON) {
+                    try {
+                        return JSON.stringify(json);
+                    } catch (e) {
+                        logger.warn(e);
+                        logger.warn('can not convert to string');
+                        return null;
+                    }
+                }
+            },
+            // 删除
+            del_mind: function (id) {
+                const me = this
+                $.ajax({
+                    url: 'delete',
+                    type: 'DELETE',
+                    data: {'id': id},
+                    success: function (result) {
+                        layer.closeAll()
+                        me.fetch_data()
+                    }
+                });
+            }
+        }
+
+        let view
+        $(function () {
+            // 初始化对象
+            view = new listView({'page_bar_elem': 'page_bar'})
+            view.init()
+            view.fetch_data()
+
+
+            // 搜索
+            $('#search').click(function () {
+                view.fetch_data()
+            })
+            // 清空
+            $('#clear').click(function () {
+                $('#mind_name').val('')
+                view.fetch_data()
+            })
+            // 创建
+            $('#create_mind').click(function () {
+                const content_html = `<div style="margin-left: 30px;margin-top: 20px;">
+                                        <div class="layui-input-inline">
+                                            <div class="layui-input-inline">思维导图名称：</div>
+                                            <div class="layui-input-inline"><input required autocomplete="off" class="layui-input" id="mind_name_crt"></div>
+                                        </div>
+                                        <button type="button" class="layui-btn" id="create_inner">创建</button>
+                                    </div>`
+                layer.open({
+                    title: '新建思维导图',
+                    skin: 'layui-layer-molv',
+                    anim: 5,
+                    type: 1,
+                    content: content_html, //这里content是一个DOM，注意：最好该元素要存放在body最外层，否则可能被其它的相对元素所影响
+                    area: ['400px', '200px']
+                });
+
+                // 调用后台创建脑图
+                $('#create_inner').click(create_inner)
+                //
+            })
+
+            // 创建mind
+            function create_inner() {
+                const mind_name = $('#mind_name_crt').val()
+                if (mind_name) {
+                    const snapshot_data = {
+                        id: 'root',
+                        topic: 'jsMind',
+                        children: [
+                            {
+                                id: 'easy',
+                                topic: 'Easy',
+                                direction: 'left',
+                                expanded: false,
+                                children: [
+                                    {id: 'easy1', topic: 'Easy to show'},
+                                    {id: 'easy2', topic: 'Easy to edit'},
+                                    {id: 'easy3', topic: 'Easy to store'},
+                                    {id: 'easy4', topic: 'Easy to embed'}
+                                ]
+                            },
+                            {
+                                id: 'open',
+                                topic: 'Open Source',
+                                direction: 'left',
+                                expanded: false,
+                                children: [
+                                    {id: 'open1', topic: 'on GitHub'},
+                                    {id: 'open2', topic: 'BSD License'}
+                                ]
+                            },
+                            {
+                                id: 'powerful',
+                                topic: 'Powerful',
+                                direction: 'right',
+                                expanded: false,
+                                children: [
+                                    {id: 'powerful1', topic: 'Base on Javascript'},
+                                    {id: 'powerful2', topic: 'Base on HTML5'},
+                                    {id: 'powerful3', topic: 'Depends on you'}
+                                ]
+                            },
+                            {
+                                id: 'other',
+                                topic: '多人协作',
+                                direction: 'right'
+                            }
+                        ]
+                    }
+                    // post start
+                    const post_data = {'mind_name': mind_name, 'data_format': 'node_tree', 'snapshot_data': view.json2string(snapshot_data)}
+                    $.post('create', post_data, function (resp) {
+                        layer.closeAll()
+                        view.fetch_data()
+
+                        layer.msg('创建成功')
+                        // 新页面打开
+                        setTimeout(function () {
+                            const id = resp.data
+                            window.open('detail?id=' + id)
+                        }, 500)
+                    })
+                    // post end
+                } else {
+                    layer.msg('请输入导图名称')
+                }
+            }
+
+            //
+        })
+
+        function delmind(id) {
+            view.del_mind(id)
+        }
+
+        // 复制链接
+        function copy_url(id) {
+            let href = location.href + `detail?id=${id}`;
+            navigator.clipboard.writeText(href)
+                .then(() => {
+                    // Success!
+                    layer.msg('复制成功')
+                })
+                .catch(err => {
+                    console.log('Something went wrong', err);
+                });
+        }
+    </script>
+</head>
+<body>
+<div style="margin-top: 5px;">
+    <div class="layui-input-inline">
+        <input autocomplete="off" class="layui-input" id="mind_name">
+    </div>
+    <button type="button" class="layui-btn" id="search">搜索</button>
+    <button type="button" class="layui-btn" id="clear">清空</button>
+    <button type="button" class="layui-btn" id="create_mind">创建导图</button>
+</div>
+<table class="layui-table" id="layui-table">
+    <colgroup>
+        <col width="500">
+        <col width="100">
+        <col width="300">
+        <col width="300">
+        <col>
+    </colgroup>
+    <thead>
+    <tr>
+        <th>名称</th>
+        <th>创建人</th>
+        <th>创建时间</th>
+        <th>更新时间</th>
+        <th>操作</th>
+    </tr>
+    </thead>
+    <tbody>
+    </tbody>
+</table>
+<div id="page_bar"></div>
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Jsmind</title>
+    <link rel="shortcut icon" href="/static/favicon.ico"/>
+    <link rel="stylesheet" type="text/css" href="/static/style/jsmind.css">
+    <style>
+        #jsmind_container {
+            width: 100%;
+            height: 800px;
+        }
+    </style>
+    <script src="/static/js/jquery-1.11.3.min.js"></script>
+    <script src="/static/js/jsmind.js"></script>
+    <script src="/static/js/jsmind.draggable.js"></script>
+    <script src="/static/js/jsmind.screenshot.js"></script>
+    <script src="/static/js/jsmind.menu.js"></script>
+    <script src="/static/js/jsmind.coop.js?d="></script>
+    <script>
+        const fetch = function () {
+            this.jm = null
+            this.coop_mind_id = null
+            this.coop_mind_log_id = null
+        }
+        // prototype
+        fetch.prototype = {
+            randomNum: function (minNum, maxNum) {
+                switch (arguments.length) {
+                    case 1:
+                        return parseInt(Math.random() * minNum + 1, 10);
+                    case 2:
+                        return parseInt(Math.random() * (maxNum - minNum + 1) + minNum, 10);
+                    default:
+                        return 0;
+                }
+            },
+            expand_all: function () {
+                this.jm.expand_all()
+            },
+            collapse_all: function () {
+                this.jm.collapse_all()
+            },
+            loadMind: function () {
+                // 打开已有脑图1、查询数据，组装option 2、实例化jm、show
+                let id =  {{ id }};
+                const me = this
+                $.get('list?id=' + id, function (resp) {
+                    // reset
+                    me.close_coop_timer_if_necessary()
+
+                    // show
+                    let snapshot_data = resp.data.snapshot_data
+                    me.coop_mind_id = id
+
+                    const resp_data = resp.data
+                    me.coop_mind_log_id = resp_data.log_id
+                    const data_format = resp_data.data_format
+                    const coop_mind_name = resp.data.coop_mind_name
+
+                    // node_tree 和 node_array 需要被转成对象，freemind 不需要
+                    snapshot_data = data_format === 'node_tree' || data_format === 'node_array' ? JSON.parse(snapshot_data) : snapshot_data
+                    me.show_mind(coop_mind_name, data_format, snapshot_data)
+                    $('#h1').html(coop_mind_name)
+                })
+            },
+            // 清除定时任务等
+            close_coop_timer_if_necessary() {
+                if (this.jm && this.jm.coop) {
+                    this.jm.coop.clear_timer()
+                }
+            },
+            show_mind: function (name, data_format, data) {
+                // options
+                const options = {
+                    container: 'jsmind_container',
+                    editable: true,
+                    theme: 'primary',
+                    coop_api_url: 'jsmind_op',
+                    coop_ws_url: `ws://${window.location.host}/ws/jsmind/`,
+                    coop_mind_id: this.coop_mind_id,
+                    coop_mind_log_id: this.coop_mind_log_id,
+                    menuOpts: {
+                        showMenu: true,
+                        injectionList: [
+                            {target: 'edit', text: '编辑节点'},
+                            {target: 'addChild', text: '添加子节点'},
+                            {target: 'addBrother', text: '添加兄弟节点'},
+                            {target: 'delete', text: '删除节点'},
+                            {target: 'screenshot', text: '下载导图'},
+                            {target: 'showAll', text: '展开全部节点'},
+                            {target: 'hideAll', text: '收起全部节点'}
+                        ]
+                    },
+                    view: {
+                        engine: 'svg'   // 思维导图各节点之间线条的绘制引擎
+                    }
+                }
+
+                // mind
+                const mind = {
+                    /* 元数据，定义思维导图的名称、作者、版本等信息 */
+                    meta: {name: name, author: 'cy20081118148@163.com', version: '0.2'},
+                    /* 数据格式声明 */
+                    format: data_format,
+                    /* 数据内容 */
+                    data: {id: 'root', topic: 'jsMind'}
+                }
+                // eslint-disable-next-line new-cap
+                let jsMind = window.jsMind
+                this.jm = new jsMind(options)
+                if (data) {
+                    mind.data = data
+                }
+                this.jm.show(mind)
+            }
+        }
+        const xxObj = new fetch()
+        xxObj.loadMind()
+    </script>
+</head>
+<body>
+<div>
+    <div>
+        <input type="button" value="折叠" onclick="xxObj.collapse_all()">
+        <input type="button" value="展开" onclick="xxObj.expand_all()">
+    </div>
+    <h3 id="h1" style="text-align: center;"></h3>
+    <div id="jsmind_container"/>
+</body>
+</html>
